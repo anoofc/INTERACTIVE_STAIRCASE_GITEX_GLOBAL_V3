@@ -24,9 +24,9 @@
 
 
 #define DEBOUNCE_DELAY    500
-#define STRIP_CLEAR_DELAY 10000
+#define STRIP_CLEAR_DELAY 2500
 #define STEP_UPDATE_DELAY 500
-#define STEP_CLEAR_DELAY  150
+#define STEP_CLEAR_DELAY  2500
 
 #define NUM_OF_STEPS      16
 
@@ -38,10 +38,16 @@ SparkFunDMX dmx;
 uint32_t sensorUpdateMillis = 0;
 uint32_t stepUpdateMillis = 0;
 uint32_t stripClearMillis = 0;
-uint32_t stepClearUpdateMillis = 0;
+// uint32_t stepClearUpdateMillis = 0;
 uint8_t step_count = 1;
 uint8_t step_down_count = NUM_OF_STEPS;
-uint8_t sequence_active = 0;
+uint8_t sequence_active_up = 0;
+uint8_t sequence_active_down = 0;
+
+uint32_t stepClearUpdateMillis [NUM_OF_STEPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+// uint32_t stepUpdateMillis      [NUM_OF_STEPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+
+bool upSeq_active [NUM_OF_STEPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 void io_Setup() {
   Serial.println("Setting up IO");
@@ -64,82 +70,86 @@ void clearStep(int step){
   if (DEBUG) {Serial.print("Clearing Step: "); Serial.println(step);}
 }
 
-void stepUpSequence(){
-  if (step_count <= NUM_OF_STEPS  && sequence_active == 1){
-    if (millis() - stepUpdateMillis < STEP_UPDATE_DELAY){ return; }
-    // if (DEBUG) {Serial.print("Step Count: "); Serial.println(step_count);}
-    showStep(step_count);
-    stepUpdateMillis = millis();
-    step_count++;
-    if (step_count > NUM_OF_STEPS){
-      if (DEBUG) {Serial.println("UP Sequence Completed");}
-      stripClearMillis = millis();
+// void upSequence(){
+//   for (uint8_t i = 0; i < NUM_OF_STEPS; i++){
+//     if (upSeq_active[i] == 0){
+//       if (millis() - stepUpdateMillis[i] < STEP_UPDATE_DELAY){ return; }
+//       showStep(i+1);
+//       stepUpdateMillis[i] = millis();
+//       upSeq_active[i] = 1;
+//       if (DEBUG) {Serial.print("Step Count: "); Serial.println(i+1);}
+//       break;
+//     }
+//   }
+// }
+
+void downSequence(){
+  static uint8_t currentStep = NUM_OF_STEPS+1;
+  if (millis() - stepUpdateMillis > STEP_UPDATE_DELAY) { 
+    if (currentStep >= 0) {
+      // Turn on the current step
+      showStep(currentStep-1);
+      stepUpdateMillis = millis();
+      stepClearUpdateMillis[currentStep-1] = millis();
+      upSeq_active[currentStep-1] = 1;
+
+      if (DEBUG) { Serial.print("Step Count: "); Serial.println(currentStep); }
+
+      currentStep--;
+      if (currentStep == 0) {
+        sequence_active_down = 0; currentStep = NUM_OF_STEPS+1;
+      }
     }
   }
 }
 
-void stepDownSequence(){
-  if (step_down_count > 0 && sequence_active == 2){
-    if (millis() - stepUpdateMillis < STEP_UPDATE_DELAY){ return; }
-    // if (DEBUG) {Serial.print("Step Count: "); Serial.println(step_down_count);}
-    showStep(step_down_count);
-    stepUpdateMillis = millis();
-    step_down_count--;
-    if (step_down_count == 0){
-      stripClearMillis = millis();
-      if (DEBUG) {Serial.println("DOWN Sequence Completed");}
+
+void upSequence() {
+  static uint8_t currentStep = 0;
+  if (millis() - stepUpdateMillis > STEP_UPDATE_DELAY) { 
+    if (currentStep < NUM_OF_STEPS) {
+      // Turn on the current step
+      showStep(currentStep + 1);
+      stepUpdateMillis = millis();
+      stepClearUpdateMillis[currentStep] = millis();
+      upSeq_active[currentStep] = 1;
+
+      if (DEBUG) { Serial.print("Step Count: "); Serial.println(currentStep + 1); }
+
+      currentStep++;
+      if (currentStep == NUM_OF_STEPS) {
+        sequence_active_up = 0; currentStep = 0;
+      }
     }
   }
 }
 
-void clearStepsSequence(){
-  if (sequence_active == 3){
-    if (millis() - stepUpdateMillis < STEP_CLEAR_DELAY){ return; }
-    clearStep(step_count);
-    step_count--;
-    stepUpdateMillis = millis();
-    if (step_count == 0){
-      if (DEBUG) {Serial.println("Steps Cleared!!!");}
-      sequence_active = 0; step_count = 1; 
-    }
-  }
-  if (sequence_active == 4){
-    if (millis() - stepUpdateMillis < STEP_CLEAR_DELAY){ return; }
-    clearStep(step_down_count);
-    step_down_count++;
-    stepUpdateMillis = millis();
-    if (step_down_count > NUM_OF_STEPS){
-      if (DEBUG) {Serial.println("Steps Cleared!!!");}
-      sequence_active = 0; step_down_count = NUM_OF_STEPS;
+void clearSequence(){
+  for (uint8_t i = 0; i < NUM_OF_STEPS; i++){
+    if ( millis() - stepClearUpdateMillis[i] > STEP_CLEAR_DELAY){ 
+      if (upSeq_active[i] == 1){
+        clearStep(i+1);
+        upSeq_active[i] = 0;
+      }
     }
   }
 }
-void clearSequenceCheck(){
-  if (sequence_active == 1 && step_count > NUM_OF_STEPS){
-    if (millis() - stripClearMillis < STRIP_CLEAR_DELAY){ return; }
-    sequence_active = 3;
-    // if (DEBUG) {Serial.println("Steps Cleared!!!");}
-  } else if (sequence_active == 2 && step_down_count == 0){
-    if (millis() - stripClearMillis < STRIP_CLEAR_DELAY){ return; }
-    sequence_active = 4;
-    // if (DEBUG) {Serial.println("Steps Cleared!!!");}
-  }
-}
-
 void readSensors(){
-  if (digitalRead(SENSOR1) == HIGH){
+  if (digitalRead(SENSOR1) == LOW){
     if (millis() - sensorUpdateMillis < DEBOUNCE_DELAY){ return; }
       sensorUpdateMillis = millis();
       stripClearMillis = millis();
       if (DEBUG) {Serial.println("Sensor 1 Triggered");}
-      if (sequence_active != 2){ sequence_active = 1; }
+      sequence_active_up = 1;
+      // if (sequence_active != 2){ sequence_active = 1; }
   }
-  if (digitalRead(SENSOR2) == HIGH){
+  if (digitalRead(SENSOR2) == LOW){
     if (millis() - sensorUpdateMillis < DEBOUNCE_DELAY){ return; }
       sensorUpdateMillis = millis();
       stripClearMillis = millis();
       if (DEBUG) {Serial.println("Sensor 2 Triggered");}
-      if (sequence_active != 1) {sequence_active = 2;}
+      sequence_active_down = 1;
+      // if (sequence_active != 1) {sequence_active = 2;}
   }
 }
 
@@ -147,11 +157,11 @@ void readSerial(){
   if (Serial.available() > 0) {
     char incoming = Serial.read();
     if (incoming == 'A'){
-      sequence_active = 0; step_count = 1; step_down_count = NUM_OF_STEPS;
+      // sequence_active = 0; step_count = 1; step_down_count = NUM_OF_STEPS;
       // TODO: Call Function to start the sequence.
     }
     if (incoming == 'B'){
-      sequence_active = 0;
+      // sequence_active = 0;
       // TODO: Call Function to Clear the sequence.
     }
   }
@@ -169,9 +179,16 @@ void setup() {
 void loop() {
   // readSerial();
   readSensors();
-  stepUpSequence();
-  stepDownSequence();
-  clearSequenceCheck();
-  clearStepsSequence();
+  if (sequence_active_up == 1){
+    upSequence();
+  }
+  if (sequence_active_down == 1){
+    downSequence();
+  }
+  clearSequence();
+  // stepUpSequence();
+  // stepDownSequence();
+  // clearSequenceCheck();
+  // clearStepsSequence();
   // debugPins();
 }
