@@ -43,7 +43,7 @@ uint8_t step_count = 1;
 uint8_t step_down_count = NUM_OF_STEPS;
 uint8_t sequence_active_up = 0;
 uint8_t sequence_active_down = 0;
-
+uint8_t seq_selector = 0;
 uint32_t stepClearUpdateMillis [NUM_OF_STEPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 // uint32_t stepUpdateMillis      [NUM_OF_STEPS] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
@@ -70,18 +70,6 @@ void clearStep(int step){
   if (DEBUG) {Serial.print("Clearing Step: "); Serial.println(step);}
 }
 
-// void upSequence(){
-//   for (uint8_t i = 0; i < NUM_OF_STEPS; i++){
-//     if (upSeq_active[i] == 0){
-//       if (millis() - stepUpdateMillis[i] < STEP_UPDATE_DELAY){ return; }
-//       showStep(i+1);
-//       stepUpdateMillis[i] = millis();
-//       upSeq_active[i] = 1;
-//       if (DEBUG) {Serial.print("Step Count: "); Serial.println(i+1);}
-//       break;
-//     }
-//   }
-// }
 
 void downSequence(){
   static uint8_t currentStep = NUM_OF_STEPS+1;
@@ -186,9 +174,4 @@ void loop() {
     downSequence();
   }
   clearSequence();
-  // stepUpSequence();
-  // stepDownSequence();
-  // clearSequenceCheck();
-  // clearStepsSequence();
-  // debugPins();
 }
